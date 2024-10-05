@@ -1,37 +1,31 @@
 import streamlit as st
-import json
-import random
-import os
 import nltk
 from nltk.stem import WordNetLemmatizer
+import random
+import json
 import numpy as np
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.optimizers import SGD
-import ssl
-from datetime import datetime
 
-# Set page config at the very beginning
+# Set page config
 st.set_page_config(page_title="Mental Health Chatbot", page_icon="🧠", layout="wide")
 
-# Disable SSL verification (Not recommended for production)
-ssl._create_default_https_context = ssl._create_unverified_context
-
-# Set NLTK data path explicitly
-nltk_data_path = os.path.expanduser('~/nltk_data')
-if not os.path.exists(nltk_data_path):
-    os.makedirs(nltk_data_path)
-nltk.data.path.append(nltk_data_path)
-
-# Function to download NLTK data
+# Ensure necessary NLTK data is downloaded at runtime
 @st.cache_resource
 def download_nltk_data():
     try:
-        nltk.download('punkt', download_dir=nltk_data_path, quiet=True)
-        nltk.download('wordnet', download_dir=nltk_data_path, quiet=True)
-    except LookupError as e:
-        st.error(f"Failed to load NLTK data: {e}")
+        nltk.download('punkt')  # Tokenizer models
+        nltk.download('wordnet')  # WordNet lemmatizer
+    except Exception as e:
+        st.error(f"Error downloading NLTK data: {e}")
         st.stop()
+
+# Call the NLTK download function
+download_nltk_data()
+
+# Proceed with your chatbot logic as before
+lemmatizer = WordNetLemmatizer()
 
 # Load or initialize chat history
 def load_chat_history():

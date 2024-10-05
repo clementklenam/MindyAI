@@ -14,6 +14,9 @@ from datetime import datetime
 # Set page config at the very beginning
 st.set_page_config(page_title="Mental Health Chatbot", page_icon="🧠", layout="wide")
 
+nltk.download('punkt')
+nltk.download('wordnet')
+
 # Disable SSL verification (Not recommended for production)
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -27,11 +30,14 @@ nltk.data.path.append(nltk_data_path)
 @st.cache_resource
 def download_nltk_data():
     try:
-        nltk.download('punkt', download_dir=nltk_data_path, quiet=True)
-        nltk.download('wordnet', download_dir=nltk_data_path, quiet=True)
-    except LookupError as e:
-        st.error(f"Failed to load NLTK data: {e}")
+        nltk.download('punkt')  # Tokenizer models
+        nltk.download('wordnet')  # WordNet lemmatizer
+    except Exception as e:
+        st.error(f"Error downloading NLTK data: {e}")
         st.stop()
+
+# Call the NLTK download function
+download_nltk_data()
 
 # Load or initialize chat history
 def load_chat_history():

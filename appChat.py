@@ -7,9 +7,11 @@ import numpy as np
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.optimizers import SGD
+import os
+from datetime import datetime
 
 # Set page config
-st.set_page_config(page_title="Mental Health Chatbot", page_icon="🧠", layout="wide")
+st.set_page_config(page_title=" AI Mental Health Assistance", page_icon="🧠", layout="wide")
 
 nltk.download('punkt')
 nltk.download('wordnet')

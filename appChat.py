@@ -27,11 +27,15 @@ nltk.data.path.append(nltk_data_path)
 @st.cache_resource
 def download_nltk_data():
     try:
-        nltk.download('punkt', download_dir=nltk_data_path, quiet=True)
-        nltk.download('wordnet', download_dir=nltk_data_path, quiet=True)
+        nltk.download('punkt', quiet=False)
+        nltk.download('wordnet', quiet=False)
     except LookupError as e:
         st.error(f"Failed to load NLTK data: {e}")
         st.stop()
+
+# Call this function before you use any NLTK features to ensure the data is available
+download_nltk_data()
+
 
 # Load or initialize chat history
 def load_chat_history():

@@ -22,6 +22,7 @@ def download_nltk_data():
     try:
         nltk.download('punkt', download_dir=os.path.join(os.path.dirname(__file__), 'nltk_data'))  # Tokenizer models
         nltk.download('wordnet', download_dir=os.path.join(os.path.dirname(__file__), 'nltk_data'))  # WordNet lemmatizer
+        nltk.download('punkt_tab', download_dir=os.path.join(os.path.dirname(__file__), 'nltk_data'))  # Sentence tokenizer
     except Exception as e:
         st.error(f"Error downloading NLTK data: {e}")
         st.stop()
@@ -206,46 +207,4 @@ with st.sidebar:
         st.success("Mood recorded successfully!")
 
     if st.button("View Mood History"):
-        mood_data = load_mood_data()
-        if mood_data:
-            dates = [datetime.fromisoformat(entry['date']) for entry in mood_data]
-            moods = [entry['mood'] for entry in mood_data]
-            st.line_chart({"Mood": moods}, use_container_width=True)
-            st.write("Mood history (1: Very Low, 5: Very High)")
-        else:
-            st.info("No mood data available yet.")
-
-# Initialize session state
-if 'messages' not in st.session_state:
-    st.session_state.messages = load_chat_history()
-
-# Display chat messages
-for message in st.session_state.messages:
-    with st.chat_message(message["role"], avatar="🧑" if message["role"] == "user" else "🤖"):
-        st.markdown(message["content"])
-
-# Chat input
-if prompt := st.chat_input("💬 What's on your mind?"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user", avatar="🧑"):
-        st.markdown(prompt)
-
-    # Get chatbot response
-    ints = predict_class(prompt)
-    response = get_response(ints, data)
-
-    # Display chatbot response
-    with st.chat_message("assistant", avatar="🤖"):
-        st.markdown(response)
-    st.session_state.messages.append({"role": "assistant", "content": response})
-
-    # Save chat history
-    save_chat_history(st.session_state.messages)
-
-# Display a helpful message if the chat is empty
-if not st.session_state.messages:
-    st.info("👋 Hello! How are you feeling today? Feel free to share your thoughts or concerns.")
-
-# Footer
-st.markdown("---")
-st.markdown("Remember, I'm here to listen and offer support, but for professional help, please consult a licensed mental health professional.")
+        mood_data = load_mood_data

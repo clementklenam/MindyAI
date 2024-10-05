@@ -1,30 +1,36 @@
 import streamlit as st
+import json
+import random
+import os
 import nltk
 from nltk.stem import WordNetLemmatizer
-import random
-import json
 import numpy as np
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.optimizers import SGD
-import os
+import ssl
 from datetime import datetime
 
-# Specify local NLTK data path
-nltk.data.path.append(os.path.join(os.path.dirname(__file__), 'nltk_data'))
+# Set page config at the very beginning
+st.set_page_config(page_title="AI  Mental Health Assistance ", page_icon="🧠", layout="wide")
 
-# Set page config
-st.set_page_config(page_title="AI Mental Health Assistance", page_icon="🧠", layout="wide")
+# Disable SSL verification (Not recommended for production)
+ssl._create_default_https_context = ssl._create_unverified_context
 
-# Ensure necessary NLTK data is available
+# Set NLTK data path explicitly
+nltk_data_path = os.path.expanduser('~/nltk_data')
+if not os.path.exists(nltk_data_path):
+    os.makedirs(nltk_data_path)
+nltk.data.path.append(nltk_data_path)
+
+# Function to download NLTK data
 @st.cache_resource
 def download_nltk_data():
     try:
-        nltk.download('punkt', download_dir=os.path.join(os.path.dirname(__file__), 'nltk_data'))  # Tokenizer models
-        nltk.download('wordnet', download_dir=os.path.join(os.path.dirname(__file__), 'nltk_data'))  # WordNet lemmatizer
-        nltk.download('punkt_tab', download_dir=os.path.join(os.path.dirname(__file__), 'nltk_data'))  # Sentence tokenizer
-    except Exception as e:
-        st.error(f"Error downloading NLTK data: {e}")
+        nltk.download('punkt', download_dir=nltk_data_path, quiet=True)
+        nltk.download('wordnet', download_dir=nltk_data_path, quiet=True)
+    except LookupError as e:
+        st.error(f"Failed to load NLTK data: {e}")
         st.stop()
 
 # Load or initialize chat history
@@ -155,8 +161,6 @@ def get_response(intents_list, intents_json):
     else:
         return "I'm not sure I understand. Can you please rephrase?"
 
-
-
 # Custom CSS for improved UI
 st.markdown("""
     <style>
@@ -207,4 +211,46 @@ with st.sidebar:
         st.success("Mood recorded successfully!")
 
     if st.button("View Mood History"):
-        mood_data = load_mood_data
+        mood_data = load_mood_data()
+        if mood_data:
+            dates = [datetime.fromisoformat(entry['date']) for entry in mood_data]
+            moods = [entry['mood'] for entry in mood_data]
+            st.line_chart({"Mood": moods}, use_container_width=True)
+            st.write("Mood history (1: Very Low, 5: Very High)")
+        else:
+            st.info("No mood data available yet.")
+
+# Initialize session state
+if 'messages' not in st.session_state:
+    st.session_state.messages = load_chat_history()
+
+# Display chat messages
+for message in st.session_state.messages:
+    with st.chat_message(message["role"], avatar="🧑" if message["role"] == "user" else "🤖"):
+        st.markdown(message["content"])
+
+# Chat input
+if prompt := st.chat_input("💬 What's on your mind?"):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user", avatar="🧑"):
+        st.markdown(prompt)
+
+    # Get chatbot response
+    ints = predict_class(prompt)
+    response = get_response(ints, data)
+
+    # Display chatbot response
+    with st.chat_message("assistant", avatar="🤖"):
+        st.markdown(response)
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+    # Save chat history
+    save_chat_history(st.session_state.messages)
+
+# Display a helpful message if the chat is empty
+if not st.session_state.messages:
+    st.info("👋 Hello! How are you feeling today? Feel free to share your thoughts or concerns.")
+
+# Footer
+st.markdown("---")
+st.markdown("Remember, I'm here to listen and offer support, but for professional help, please consult a licensed mental health professional.")

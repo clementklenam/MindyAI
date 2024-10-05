@@ -10,11 +10,12 @@ from tensorflow.keras.optimizers import SGD
 import os
 from datetime import datetime
 
+nltk.data.path.append(os.path.join(os.path.dirname(__file__), 'nltk_data'))
+
 # Set page config
 st.set_page_config(page_title=" AI Mental Health Assistance", page_icon="🧠", layout="wide")
 
-nltk.download('punkt')
-nltk.download('wordnet')
+
 
 # Ensure necessary NLTK data is downloaded at runtime
 @st.cache_resource

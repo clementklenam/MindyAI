@@ -10,19 +10,18 @@ from tensorflow.keras.optimizers import SGD
 import os
 from datetime import datetime
 
+# Specify local NLTK data path
 nltk.data.path.append(os.path.join(os.path.dirname(__file__), 'nltk_data'))
 
 # Set page config
-st.set_page_config(page_title=" AI Mental Health Assistance", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="AI Mental Health Assistance", page_icon="🧠", layout="wide")
 
-
-
-# Ensure necessary NLTK data is downloaded at runtime
+# Ensure necessary NLTK data is available
 @st.cache_resource
 def download_nltk_data():
     try:
-        nltk.download('punkt')  # Tokenizer models
-        nltk.download('wordnet')  # WordNet lemmatizer
+        nltk.download('punkt', download_dir=os.path.join(os.path.dirname(__file__), 'nltk_data'))  # Tokenizer models
+        nltk.download('wordnet', download_dir=os.path.join(os.path.dirname(__file__), 'nltk_data'))  # WordNet lemmatizer
     except Exception as e:
         st.error(f"Error downloading NLTK data: {e}")
         st.stop()
@@ -154,6 +153,8 @@ def get_response(intents_list, intents_json):
         return result
     else:
         return "I'm not sure I understand. Can you please rephrase?"
+
+
 
 # Custom CSS for improved UI
 st.markdown("""

@@ -1,6 +1,3 @@
 import nltk
-
-# Download the required NLTK data
-nltk.download('punkt')
-nltk.download('wordnet')
-nltk.download('punkt_tab')
+nltk.download('punkt', download_dir='./nltk_data')  # Change the directory to your project folder
+nltk.download('wordnet', download_dir='./nltk_data')  # If you need wordnet as well

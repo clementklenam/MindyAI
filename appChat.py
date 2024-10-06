@@ -179,11 +179,23 @@ with st.sidebar:
 
     st.header("Mood Tracker")
     mood = st.slider("How are you feeling today?", 1, 5, 3)
-    if st.button("Submit Mood"):
+    mood_submitted = st.button("Submit Mood")
+
+    if mood_submitted:
         mood_data = load_mood_data()
         mood_data.append({"date": datetime.now().isoformat(), "mood": mood})
         save_mood_data(mood_data)
         st.success("Mood recorded successfully!")
+
+    if st.button("View Mood History"):
+        mood_data = load_mood_data()
+        if mood_data:
+            dates = [datetime.fromisoformat(entry['date']) for entry in mood_data]
+            moods = [entry['mood'] for entry in mood_data]
+            st.line_chart({"Mood": moods}, use_container_width=True)
+            st.write("Mood history (1: Very Low, 5: Very High)")
+        else:
+            st.info("No mood data available yet.")
 
 # Chat session state and handling input
 if 'messages' not in st.session_state:

@@ -3,6 +3,7 @@ import json
 import random
 import os
 import nltk
+from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
 import numpy as np
 from tensorflow.keras.models import Sequential
@@ -10,6 +11,9 @@ from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.optimizers import SGD
 import ssl
 from datetime import datetime
+
+# Print NLTK data path for debugging
+print("NLTK data path:", nltk.data.path)
 
 # Set page configuration
 st.set_page_config(page_title="AI Mental Health Assistance", page_icon="🧠", layout="wide")
@@ -32,7 +36,7 @@ def download_nltk_data():
         st.success("NLTK data downloaded successfully.")
     except Exception as e:
         st.error(f"Error downloading NLTK data: {e}")
-        st.stop()
+        st.warning("Continuing with limited functionality.")
 
 # Download NLTK data
 download_nltk_data()
@@ -67,18 +71,23 @@ classes = []
 documents = []
 ignore_chars = ['?', '!', '.', ',']
 
+# Simple tokenization function as fallback
+def simple_tokenize(text):
+    return text.split()
+
 # Tokenize and process data
 for intent in data['intents']:
     for pattern in intent['patterns']:
         try:
-            word_list = nltk.word_tokenize(pattern)
-            words.extend(word_list)
-            documents.append((word_list, intent['tag']))
-            if intent['tag'] not in classes:
-                classes.append(intent['tag'])
-        except Exception as e:
-            st.warning(f"Error processing pattern '{pattern}': {e}")
-            continue
+            word_list = word_tokenize(pattern)
+        except LookupError:
+            st.warning("NLTK tokenizer not available. Using simple tokenization.")
+            word_list = simple_tokenize(pattern)
+        
+        words.extend(word_list)
+        documents.append((word_list, intent['tag']))
+        if intent['tag'] not in classes:
+            classes.append(intent['tag'])
 
 # Lemmatize and clean words
 words = [lemmatizer.lemmatize(word.lower()) for word in words if word not in ignore_chars]
@@ -130,7 +139,10 @@ model = create_and_train_model(train_x, train_y)
 
 # Utility functions to process input and predict response
 def clean_up_sentence(sentence):
-    sentence_words = nltk.word_tokenize(sentence)
+    try:
+        sentence_words = word_tokenize(sentence)
+    except LookupError:
+        sentence_words = simple_tokenize(sentence)
     sentence_words = [lemmatizer.lemmatize(word.lower()) for word in sentence_words]
     return sentence_words
 

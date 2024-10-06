@@ -1,30 +1,45 @@
 import streamlit as st
-import nltk
-from nltk.stem import WordNetLemmatizer
-import random
 import json
+import random
+import os
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
 import numpy as np
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.optimizers import SGD
-import os
+import ssl
 from datetime import datetime
 
-# Specify local NLTK data path
-nltk.data.path.append(os.path.join(os.path.dirname(__file__), 'nltk_data'))
+# Print NLTK data path for debugging
+print("NLTK data path:", nltk.data.path)
 
-# Set page config
+# Set page configuration
 st.set_page_config(page_title="AI Mental Health Assistance", page_icon="🧠", layout="wide")
 
-# Ensure necessary NLTK data is available
-@st.cache_resource(show_spinner=False)
+# Disable SSL verification (Not recommended for production)
+ssl._create_default_https_context = ssl._create_unverified_context
+
+# Set the NLTK data path explicitly
+nltk_data_path = os.path.expanduser('~/nltk_data')
+if not os.path.exists(nltk_data_path):
+    os.makedirs(nltk_data_path)
+nltk.data.path.append(nltk_data_path)
+
+# Function to download required NLTK data
+@st.cache_resource
 def download_nltk_data():
     try:
-        nltk.download('punkt', download_dir=os.path.join(os.path.dirname(__file__), 'nltk_data'), quiet=True)
-        nltk.download('wordnet', download_dir=os.path.join(os.path.dirname(__file__), 'nltk_data'), quiet=True)
+        nltk.download('punkt', quiet=True, raise_on_error=True)
+        nltk.download('wordnet', quiet=True, raise_on_error=True)
+        st.success("NLTK data downloaded successfully.")
     except Exception as e:
         st.error(f"Error downloading NLTK data: {e}")
-        st.stop()
+        st.warning("Continuing with limited functionality.")
+
+# Download NLTK data
+download_nltk_data()
 
 # Load or initialize chat history
 def load_chat_history():
@@ -37,25 +52,15 @@ def save_chat_history(messages):
     with open('chat_history.json', 'w') as file:
         json.dump(messages, file)
 
-# Load or initialize mood data
-def load_mood_data():
-    if os.path.exists('mood_data.json'):
-        with open('mood_data.json', 'r') as file:
-            return json.load(file)
-    return []
-
-def save_mood_data(mood_data):
-    with open('mood_data.json', 'w') as file:
-        json.dump(mood_data, file)
-
-# Download NLTK data
-download_nltk_data()
-
 # Load the intents data
-@st.cache_resource(show_spinner=False)
+@st.cache_resource
 def load_intents(file_path):
-    with open(file_path) as file:
-        return json.load(file)
+    try:
+        with open(file_path) as file:
+            return json.load(file)
+    except Exception as e:
+        st.error(f"Error loading intents file: {e}")
+        st.stop()
 
 data = load_intents('intents.json')
 
@@ -66,18 +71,30 @@ classes = []
 documents = []
 ignore_chars = ['?', '!', '.', ',']
 
+# Simple tokenization function as fallback
+def simple_tokenize(text):
+    return text.split()
+
+# Tokenize and process data
 for intent in data['intents']:
     for pattern in intent['patterns']:
-        word_list = nltk.word_tokenize(pattern)
+        try:
+            word_list = word_tokenize(pattern)
+        except LookupError:
+            st.warning("NLTK tokenizer not available. Using simple tokenization.")
+            word_list = simple_tokenize(pattern)
+        
         words.extend(word_list)
         documents.append((word_list, intent['tag']))
         if intent['tag'] not in classes:
             classes.append(intent['tag'])
 
+# Lemmatize and clean words
 words = [lemmatizer.lemmatize(word.lower()) for word in words if word not in ignore_chars]
 words = sorted(list(set(words)))
 classes = sorted(list(set(classes)))
 
+# Prepare training data
 training = []
 output_empty = [0] * len(classes)
 
@@ -85,6 +102,8 @@ for document in documents:
     bag = []
     word_patterns = document[0]
     word_patterns = [lemmatizer.lemmatize(word.lower()) for word in word_patterns]
+    
+    # Create bag of words
     for word in words:
         bag.append(1 if word in word_patterns else 0)
 
@@ -99,7 +118,7 @@ train_x = list(training[:, 0])
 train_y = list(training[:, 1])
 
 # Function to create and train the model
-@st.cache_resource(show_spinner=False)
+@st.cache_resource
 def create_and_train_model(train_x, train_y):
     model = Sequential()
     model.add(Dense(128, input_shape=(len(train_x[0]),), activation='relu'))
@@ -111,14 +130,19 @@ def create_and_train_model(train_x, train_y):
     sgd = SGD(learning_rate=0.01, momentum=0.9, nesterov=True)
     model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
 
+    # Train the model
     model.fit(np.array(train_x), np.array(train_y), epochs=200, batch_size=5, verbose=0)
     return model
 
 # Create and train the model
 model = create_and_train_model(train_x, train_y)
 
+# Utility functions to process input and predict response
 def clean_up_sentence(sentence):
-    sentence_words = nltk.word_tokenize(sentence)
+    try:
+        sentence_words = word_tokenize(sentence)
+    except LookupError:
+        sentence_words = simple_tokenize(sentence)
     sentence_words = [lemmatizer.lemmatize(word.lower()) for word in sentence_words]
     return sentence_words
 
@@ -137,9 +161,7 @@ def predict_class(sentence):
     ERROR_THRESHOLD = 0.25
     results = [[i, r] for i, r in enumerate(res) if r > ERROR_THRESHOLD]
     results.sort(key=lambda x: x[1], reverse=True)
-    return_list = []
-    for r in results:
-        return_list.append({'intent': classes[r[0]], 'probability': str(r[1])})
+    return_list = [{'intent': classes[r[0]], 'probability': str(r[1])} for r in results]
     return return_list
 
 def get_response(intents_list, intents_json):
@@ -148,52 +170,26 @@ def get_response(intents_list, intents_json):
         list_of_intents = intents_json['intents']
         for i in list_of_intents:
             if i['tag'] == tag:
-                result = random.choice(i['responses'])
-                break
-        return result
-    else:
-        return "I'm not sure I understand. Can you please rephrase?"
+                return random.choice(i['responses'])
+    return "I'm not sure I understand. Can you please rephrase?"
 
-# Custom CSS for improved UI
-st.markdown("""
-    <style>
-    .stApp {
-        max-width: 1500px;
-        margin: 0 auto;
-    }
-    .stChatInput {
-        border-radius: 15px;
-    }
-    .stChatMessage {
-        padding: 10px;
-        border-radius: 15px;
-        margin-bottom: 10px;
-    }
-    .user-message {
-        background-color: #e6f3ff;
-    }
-    .bot-message {
-        background-color: #f0f0f0;
-    }
-    .st-emotion-cache-1v0mbdj > img {
-        border-radius: 50%;
-    }
-    @keyframes pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.1); }
-        100% { transform: scale(1); }
-    }
-    .loading {
-        animation: pulse 1s infinite;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# Function to load mood data
+def load_mood_data():
+    if os.path.exists('mood_data.json'):
+        with open('mood_data.json', 'r') as file:
+            return json.load(file)
+    return []
 
-# Title and introduction
+# Function to save mood data
+def save_mood_data(mood_data):
+    with open('mood_data.json', 'w') as file:
+        json.dump(mood_data, file)
+
+# Chatbot UI elements
 st.title("🧠 Mental Health Chatbot")
 st.markdown("Welcome to your personal mental health assistant. Feel free to share your thoughts and concerns.")
 
-# Sidebar for options and mood tracking
+# Sidebar with options and mood tracking
 with st.sidebar:
     st.header("Options")
     if st.button("Start a New Chat"):
@@ -203,65 +199,35 @@ with st.sidebar:
 
     st.header("Mood Tracker")
     mood = st.slider("How are you feeling today?", 1, 5, 3)
-    mood_submitted = st.button("Submit Mood")
-
-    if mood_submitted:
+    if st.button("Submit Mood"):
         mood_data = load_mood_data()
         mood_data.append({"date": datetime.now().isoformat(), "mood": mood})
         save_mood_data(mood_data)
         st.success("Mood recorded successfully!")
 
-    if st.button("View Mood History"):
-        mood_data = load_mood_data()
-        if mood_data:
-            dates = [datetime.fromisoformat(entry['date']) for entry in mood_data]
-            moods = [entry['mood'] for entry in mood_data]
-            st.line_chart({"Mood": moods}, use_container_width=True)
-            st.write("Mood history (1: Very Low, 5: Very High)")
-        else:
-            st.info("No mood data available yet.")
-
-# Initialize session state
+# Chat session state and handling input
 if 'messages' not in st.session_state:
     st.session_state.messages = load_chat_history()
 
-# Display chat messages
 for message in st.session_state.messages:
-    with st.chat_message(message["role"], avatar="🧑" if message["role"] == "user" else "🤖"):
+    with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Chat input
 if prompt := st.chat_input("💬 What's on your mind?"):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user", avatar="🧑"):
+    with st.chat_message("user"):
         st.markdown(prompt)
 
     # Get chatbot response
-    with st.chat_message("assistant", avatar="🤖"):
-        message_placeholder = st.empty()
-        message_placeholder.markdown("🤔")
-        
-        ints = predict_class(prompt)
-        response = get_response(ints, data)
+    intents = predict_class(prompt)
+    response = get_response(intents, data)
 
-        # Simulate typing effect
-        full_response = ""
-        for chunk in response.split():
-            full_response += chunk + " "
-            message_placeholder.markdown(f"{full_response}▌")
-            time.sleep(0.05)
-
-        message_placeholder.markdown(response)
-
+    with st.chat_message("assistant"):
+        st.markdown(response)
     st.session_state.messages.append({"role": "assistant", "content": response})
 
-    # Save chat history
     save_chat_history(st.session_state.messages)
 
-# Display a helpful message if the chat is empty
-if not st.session_state.messages:
-    st.info("👋 Hello! How are you feeling today? Feel free to share your thoughts or concerns.")
-
-# Footer
+# Footer note
 st.markdown("---")
-st.markdown("Remember, I'm here to listen and offer support, but for professional help, please consult a licensed mental health professional.")
+st.markdown("Remember, this chatbot is here to listen and offer support. For professional help, please consult a licensed mental health professional.")

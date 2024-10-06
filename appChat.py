@@ -21,7 +21,7 @@ def simple_lemmatize(word):
     return word[:-1] if word.endswith('s') else word
 
 # Load or initialize chat history
-@st.cache_data(show_spinner=False, ttl="7m")
+
 def load_chat_history():
     file_path = 'chat_history.json'
     if os.path.exists(file_path):

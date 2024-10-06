@@ -220,6 +220,15 @@ if prompt := st.chat_input("💬 What's on your mind?"):
 
     save_chat_history(st.session_state.messages)
 
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
+
 # Footer note
 st.markdown("---")
 st.markdown("Remember, this chatbot is here to listen and offer support. For professional help, please consult a licensed mental health professional.")

@@ -166,7 +166,7 @@ def save_mood_data(mood_data):
         st.warning("Unable to save mood data.")
 
 # Chatbot UI elements
-st.title("🧠 Mental Health Chatbot")
+st.title("🧠 AI Mental Health Assistance")
 st.markdown("Welcome to your personal mental health assistant. Feel free to share your thoughts and concerns.")
 
 # Sidebar with options and mood tracking

@@ -154,6 +154,40 @@ def get_response(intents_list, intents_json):
     else:
         return "I'm not sure I understand. Can you please rephrase?"
 
+# Custom CSS for improved UI
+st.markdown("""
+    <style>
+    .stApp {
+        max-width: 1500px;
+        margin: 0 auto;
+    }
+    .stChatInput {
+        border-radius: 15px;
+    }
+    .stChatMessage {
+        padding: 10px;
+        border-radius: 15px;
+        margin-bottom: 10px;
+    }
+    .user-message {
+        background-color: #e6f3ff;
+    }
+    .bot-message {
+        background-color: #f0f0f0;
+    }
+    .st-emotion-cache-1v0mbdj > img {
+        border-radius: 50%;
+    }
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+    }
+    .loading {
+        animation: pulse 1s infinite;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 # Title and introduction
 st.title("🧠 Mental Health Chatbot")

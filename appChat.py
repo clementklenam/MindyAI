@@ -2,42 +2,23 @@ import streamlit as st
 import json
 import random
 import os
-import nltk
-from nltk.tokenize import word_tokenize
-from nltk.stem import WordNetLemmatizer
+import re
 import numpy as np
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.optimizers import SGD
-import ssl
 from datetime import datetime
-
-# Print NLTK data path for debugging
-print("NLTK data path:", nltk.data.path)
 
 # Set page configuration
 st.set_page_config(page_title="AI Mental Health Assistance", page_icon="🧠", layout="wide")
 
-# Disable SSL verification (Not recommended for production)
-ssl._create_default_https_context = ssl._create_unverified_context
+# Simple tokenization function
+def simple_tokenize(text):
+    return re.findall(r'\w+', text.lower())
 
-# Set the NLTK data path to a writable location
-nltk_data_path = os.path.join(os.getcwd(), 'nltk_data')
-nltk.data.path.append(nltk_data_path)
-
-# Function to download required NLTK data
-@st.cache_resource
-def download_nltk_data():
-    try:
-        nltk.download('punkt', download_dir=nltk_data_path, quiet=True, raise_on_error=True)
-        nltk.download('wordnet', download_dir=nltk_data_path, quiet=True, raise_on_error=True)
-        st.success("NLTK data downloaded successfully.")
-    except Exception as e:
-        st.error(f"Error downloading NLTK data: {e}")
-        st.warning("Continuing with limited functionality.")
-
-# Download NLTK data
-download_nltk_data()
+# Simple lemmatization function (just removes 's' from the end of words)
+def simple_lemmatize(word):
+    return word[:-1] if word.endswith('s') else word
 
 # Load or initialize chat history
 def load_chat_history():
@@ -70,33 +51,21 @@ def load_intents(file_path):
 
 data = load_intents('intents.json')
 
-lemmatizer = WordNetLemmatizer()
-
 words = []
 classes = []
 documents = []
-ignore_chars = ['?', '!', '.', ',']
 
-# Simple tokenization function as fallback
-def simple_tokenize(text):
-    return text.split()
-
-# Tokenize and process data
+# Process intents data
 for intent in data['intents']:
     for pattern in intent['patterns']:
-        try:
-            word_list = word_tokenize(pattern)
-        except LookupError:
-            st.warning("NLTK tokenizer not available. Using simple tokenization.")
-            word_list = simple_tokenize(pattern)
-        
+        word_list = simple_tokenize(pattern)
         words.extend(word_list)
         documents.append((word_list, intent['tag']))
         if intent['tag'] not in classes:
             classes.append(intent['tag'])
 
 # Lemmatize and clean words
-words = [lemmatizer.lemmatize(word.lower()) for word in words if word not in ignore_chars]
+words = [simple_lemmatize(word) for word in words]
 words = sorted(list(set(words)))
 classes = sorted(list(set(classes)))
 
@@ -107,7 +76,7 @@ output_empty = [0] * len(classes)
 for document in documents:
     bag = []
     word_patterns = document[0]
-    word_patterns = [lemmatizer.lemmatize(word.lower()) for word in word_patterns]
+    word_patterns = [simple_lemmatize(word) for word in word_patterns]
     
     # Create bag of words
     for word in words:
@@ -145,11 +114,8 @@ model = create_and_train_model(train_x, train_y)
 
 # Utility functions to process input and predict response
 def clean_up_sentence(sentence):
-    try:
-        sentence_words = word_tokenize(sentence)
-    except LookupError:
-        sentence_words = simple_tokenize(sentence)
-    sentence_words = [lemmatizer.lemmatize(word.lower()) for word in sentence_words]
+    sentence_words = simple_tokenize(sentence)
+    sentence_words = [simple_lemmatize(word) for word in sentence_words]
     return sentence_words
 
 def bag_of_words(sentence):

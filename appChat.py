@@ -27,8 +27,9 @@ nltk.data.path.append(nltk_data_path)
 @st.cache_resource
 def download_nltk_data():
     try:
-        nltk.download('punkt', quiet=False)  # Download 'punkt' tokenizer
-        nltk.download('wordnet', quiet=False)  # Download 'wordnet' for lemmatization
+        nltk.download('punkt', quiet=True, raise_on_error=True)
+        nltk.download('wordnet', quiet=True, raise_on_error=True)
+        st.success("NLTK data downloaded successfully.")
     except Exception as e:
         st.error(f"Error downloading NLTK data: {e}")
         st.stop()
@@ -50,8 +51,12 @@ def save_chat_history(messages):
 # Load the intents data
 @st.cache_resource
 def load_intents(file_path):
-    with open(file_path) as file:
-        return json.load(file)
+    try:
+        with open(file_path) as file:
+            return json.load(file)
+    except Exception as e:
+        st.error(f"Error loading intents file: {e}")
+        st.stop()
 
 data = load_intents('intents.json')
 
@@ -65,11 +70,15 @@ ignore_chars = ['?', '!', '.', ',']
 # Tokenize and process data
 for intent in data['intents']:
     for pattern in intent['patterns']:
-        word_list = nltk.word_tokenize(pattern)  # Tokenize sentence into words
-        words.extend(word_list)
-        documents.append((word_list, intent['tag']))
-        if intent['tag'] not in classes:
-            classes.append(intent['tag'])
+        try:
+            word_list = nltk.word_tokenize(pattern)
+            words.extend(word_list)
+            documents.append((word_list, intent['tag']))
+            if intent['tag'] not in classes:
+                classes.append(intent['tag'])
+        except Exception as e:
+            st.warning(f"Error processing pattern '{pattern}': {e}")
+            continue
 
 # Lemmatize and clean words
 words = [lemmatizer.lemmatize(word.lower()) for word in words if word not in ignore_chars]
@@ -151,6 +160,18 @@ def get_response(intents_list, intents_json):
             if i['tag'] == tag:
                 return random.choice(i['responses'])
     return "I'm not sure I understand. Can you please rephrase?"
+
+# Function to load mood data
+def load_mood_data():
+    if os.path.exists('mood_data.json'):
+        with open('mood_data.json', 'r') as file:
+            return json.load(file)
+    return []
+
+# Function to save mood data
+def save_mood_data(mood_data):
+    with open('mood_data.json', 'w') as file:
+        json.dump(mood_data, file)
 
 # Chatbot UI elements
 st.title("🧠 Mental Health Chatbot")

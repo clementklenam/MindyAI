@@ -109,9 +109,8 @@ def create_and_train_model(train_x, train_y):
     model.fit(np.array(train_x), np.array(train_y), epochs=200, batch_size=5, verbose=0)
     return model
 
-# Create and train the model with the spinner message disabled
-with st.spinner(text=None, show_spinner=False):
-    model = create_and_train_model(train_x, train_y)
+# Create and train the model without a spinner
+model = create_and_train_model(train_x, train_y)
 
 # Utility functions to process input and predict response
 def clean_up_sentence(sentence):

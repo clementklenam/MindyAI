@@ -57,7 +57,7 @@ classes = []
 documents = []
 
 # Process intents data
-@st.cache_data(show_spinner=False, ttl="7m")
+
 for intent in data['intents']:
     for pattern in intent['patterns']:
         word_list = simple_tokenize(pattern)

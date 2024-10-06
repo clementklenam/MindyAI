@@ -21,18 +21,16 @@ st.set_page_config(page_title="AI Mental Health Assistance", page_icon="🧠", l
 # Disable SSL verification (Not recommended for production)
 ssl._create_default_https_context = ssl._create_unverified_context
 
-# Set the NLTK data path explicitly
-nltk_data_path = os.path.expanduser('~/nltk_data')
-if not os.path.exists(nltk_data_path):
-    os.makedirs(nltk_data_path)
+# Set the NLTK data path to a writable location
+nltk_data_path = os.path.join(os.getcwd(), 'nltk_data')
 nltk.data.path.append(nltk_data_path)
 
 # Function to download required NLTK data
 @st.cache_resource
 def download_nltk_data():
     try:
-        nltk.download('punkt', quiet=True, raise_on_error=True)
-        nltk.download('wordnet', quiet=True, raise_on_error=True)
+        nltk.download('punkt', download_dir=nltk_data_path, quiet=True, raise_on_error=True)
+        nltk.download('wordnet', download_dir=nltk_data_path, quiet=True, raise_on_error=True)
         st.success("NLTK data downloaded successfully.")
     except Exception as e:
         st.error(f"Error downloading NLTK data: {e}")
@@ -43,14 +41,22 @@ download_nltk_data()
 
 # Load or initialize chat history
 def load_chat_history():
-    if os.path.exists('chat_history.json'):
-        with open('chat_history.json', 'r') as file:
-            return json.load(file)
+    file_path = 'chat_history.json'
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r') as file:
+                return json.load(file)
+        except json.JSONDecodeError:
+            st.warning("Chat history file is corrupted. Starting with an empty history.")
     return []
 
 def save_chat_history(messages):
-    with open('chat_history.json', 'w') as file:
-        json.dump(messages, file)
+    file_path = 'chat_history.json'
+    try:
+        with open(file_path, 'w') as file:
+            json.dump(messages, file)
+    except IOError:
+        st.warning("Unable to save chat history.")
 
 # Load the intents data
 @st.cache_resource
@@ -60,7 +66,7 @@ def load_intents(file_path):
             return json.load(file)
     except Exception as e:
         st.error(f"Error loading intents file: {e}")
-        st.stop()
+        return {"intents": []}  # Return empty intents instead of stopping the app
 
 data = load_intents('intents.json')
 
@@ -175,15 +181,23 @@ def get_response(intents_list, intents_json):
 
 # Function to load mood data
 def load_mood_data():
-    if os.path.exists('mood_data.json'):
-        with open('mood_data.json', 'r') as file:
-            return json.load(file)
+    file_path = 'mood_data.json'
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r') as file:
+                return json.load(file)
+        except json.JSONDecodeError:
+            st.warning("Mood data file is corrupted. Starting with empty data.")
     return []
 
 # Function to save mood data
 def save_mood_data(mood_data):
-    with open('mood_data.json', 'w') as file:
-        json.dump(mood_data, file)
+    file_path = 'mood_data.json'
+    try:
+        with open(file_path, 'w') as file:
+            json.dump(mood_data, file)
+    except IOError:
+        st.warning("Unable to save mood data.")
 
 # Chatbot UI elements
 st.title("🧠 Mental Health Chatbot")

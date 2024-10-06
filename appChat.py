@@ -31,6 +31,12 @@ def load_chat_history():
             st.warning("Chat history file is corrupted. Starting with an empty history.")
     return []
 
+
+# Create and train the model with the spinner message disabled
+with st.spinner(text=None, show_spinner=False):
+    model = create_and_train_model(train_x, train_y)
+
+
 def save_chat_history(messages):
     file_path = 'chat_history.json'
     try:

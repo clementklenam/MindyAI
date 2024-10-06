@@ -41,7 +41,7 @@ def save_chat_history(messages):
         st.warning("Unable to save chat history.")
 
 # Load the intents data
-@st.cache_resource
+
 def load_intents(file_path):
     try:
         with open(file_path) as file:

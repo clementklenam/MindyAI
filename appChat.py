@@ -2,55 +2,42 @@ import streamlit as st
 import json
 import random
 import os
-import nltk
-from nltk.tokenize import word_tokenize
-from nltk.stem import WordNetLemmatizer
+import re
 import numpy as np
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.optimizers import SGD
-import ssl
 from datetime import datetime
-
-# Print NLTK data path for debugging
-print("NLTK data path:", nltk.data.path)
 
 # Set page configuration
 st.set_page_config(page_title="AI Mental Health Assistance", page_icon="🧠", layout="wide")
 
-# Disable SSL verification (Not recommended for production)
-ssl._create_default_https_context = ssl._create_unverified_context
+# Simple tokenization function
+def simple_tokenize(text):
+    return re.findall(r'\w+', text.lower())
 
-# Set the NLTK data path explicitly
-nltk_data_path = os.path.expanduser('~/nltk_data')
-if not os.path.exists(nltk_data_path):
-    os.makedirs(nltk_data_path)
-nltk.data.path.append(nltk_data_path)
-
-# Function to download required NLTK data
-@st.cache_resource
-def download_nltk_data():
-    try:
-        nltk.download('punkt', quiet=True, raise_on_error=True)
-        nltk.download('wordnet', quiet=True, raise_on_error=True)
-        st.success("NLTK data downloaded successfully.")
-    except Exception as e:
-        st.error(f"Error downloading NLTK data: {e}")
-        st.warning("Continuing with limited functionality.")
-
-# Download NLTK data
-download_nltk_data()
+# Simple lemmatization function (just removes 's' from the end of words)
+def simple_lemmatize(word):
+    return word[:-1] if word.endswith('s') else word
 
 # Load or initialize chat history
 def load_chat_history():
-    if os.path.exists('chat_history.json'):
-        with open('chat_history.json', 'r') as file:
-            return json.load(file)
+    file_path = 'chat_history.json'
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r') as file:
+                return json.load(file)
+        except json.JSONDecodeError:
+            st.warning("Chat history file is corrupted. Starting with an empty history.")
     return []
 
 def save_chat_history(messages):
-    with open('chat_history.json', 'w') as file:
-        json.dump(messages, file)
+    file_path = 'chat_history.json'
+    try:
+        with open(file_path, 'w') as file:
+            json.dump(messages, file)
+    except IOError:
+        st.warning("Unable to save chat history.")
 
 # Load the intents data
 @st.cache_resource
@@ -60,37 +47,25 @@ def load_intents(file_path):
             return json.load(file)
     except Exception as e:
         st.error(f"Error loading intents file: {e}")
-        st.stop()
+        return {"intents": []}  # Return empty intents instead of stopping the app
 
 data = load_intents('intents.json')
-
-lemmatizer = WordNetLemmatizer()
 
 words = []
 classes = []
 documents = []
-ignore_chars = ['?', '!', '.', ',']
 
-# Simple tokenization function as fallback
-def simple_tokenize(text):
-    return text.split()
-
-# Tokenize and process data
+# Process intents data
 for intent in data['intents']:
     for pattern in intent['patterns']:
-        try:
-            word_list = word_tokenize(pattern)
-        except LookupError:
-            st.warning("NLTK tokenizer not available. Using simple tokenization.")
-            word_list = simple_tokenize(pattern)
-        
+        word_list = simple_tokenize(pattern)
         words.extend(word_list)
         documents.append((word_list, intent['tag']))
         if intent['tag'] not in classes:
             classes.append(intent['tag'])
 
 # Lemmatize and clean words
-words = [lemmatizer.lemmatize(word.lower()) for word in words if word not in ignore_chars]
+words = [simple_lemmatize(word) for word in words]
 words = sorted(list(set(words)))
 classes = sorted(list(set(classes)))
 
@@ -101,7 +76,7 @@ output_empty = [0] * len(classes)
 for document in documents:
     bag = []
     word_patterns = document[0]
-    word_patterns = [lemmatizer.lemmatize(word.lower()) for word in word_patterns]
+    word_patterns = [simple_lemmatize(word) for word in word_patterns]
     
     # Create bag of words
     for word in words:
@@ -139,11 +114,8 @@ model = create_and_train_model(train_x, train_y)
 
 # Utility functions to process input and predict response
 def clean_up_sentence(sentence):
-    try:
-        sentence_words = word_tokenize(sentence)
-    except LookupError:
-        sentence_words = simple_tokenize(sentence)
-    sentence_words = [lemmatizer.lemmatize(word.lower()) for word in sentence_words]
+    sentence_words = simple_tokenize(sentence)
+    sentence_words = [simple_lemmatize(word) for word in sentence_words]
     return sentence_words
 
 def bag_of_words(sentence):
@@ -175,18 +147,26 @@ def get_response(intents_list, intents_json):
 
 # Function to load mood data
 def load_mood_data():
-    if os.path.exists('mood_data.json'):
-        with open('mood_data.json', 'r') as file:
-            return json.load(file)
+    file_path = 'mood_data.json'
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r') as file:
+                return json.load(file)
+        except json.JSONDecodeError:
+            st.warning("Mood data file is corrupted. Starting with empty data.")
     return []
 
 # Function to save mood data
 def save_mood_data(mood_data):
-    with open('mood_data.json', 'w') as file:
-        json.dump(mood_data, file)
+    file_path = 'mood_data.json'
+    try:
+        with open(file_path, 'w') as file:
+            json.dump(mood_data, file)
+    except IOError:
+        st.warning("Unable to save mood data.")
 
 # Chatbot UI elements
-st.title("🧠 Mental Health Chatbot")
+st.title("🧠 AI Mental Health Assistance")
 st.markdown("Welcome to your personal mental health assistant. Feel free to share your thoughts and concerns.")
 
 # Sidebar with options and mood tracking
@@ -199,11 +179,23 @@ with st.sidebar:
 
     st.header("Mood Tracker")
     mood = st.slider("How are you feeling today?", 1, 5, 3)
-    if st.button("Submit Mood"):
+    mood_submitted = st.button("Submit Mood")
+
+    if mood_submitted:
         mood_data = load_mood_data()
         mood_data.append({"date": datetime.now().isoformat(), "mood": mood})
         save_mood_data(mood_data)
         st.success("Mood recorded successfully!")
+
+    if st.button("View Mood History"):
+        mood_data = load_mood_data()
+        if mood_data:
+            dates = [datetime.fromisoformat(entry['date']) for entry in mood_data]
+            moods = [entry['mood'] for entry in mood_data]
+            st.line_chart({"Mood": moods}, use_container_width=True)
+            st.write("Mood history (1: Very Low, 5: Very High)")
+        else:
+            st.info("No mood data available yet.")
 
 # Chat session state and handling input
 if 'messages' not in st.session_state:

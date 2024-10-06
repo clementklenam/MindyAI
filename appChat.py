@@ -93,7 +93,7 @@ train_x = list(training[:, 0])
 train_y = list(training[:, 1])
 
 # Function to create and train the model
-@st.cache_resource
+
 def create_and_train_model(train_x, train_y):
     model = Sequential()
     model.add(Dense(128, input_shape=(len(train_x[0]),), activation='relu'))

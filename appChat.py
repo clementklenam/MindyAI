@@ -1,84 +1,90 @@
 import streamlit as st
-import json
+import nltk
+from nltk.stem import WordNetLemmatizer
 import random
-import os
-import re
+import json
 import numpy as np
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.optimizers import SGD
+import os
 from datetime import datetime
 
-# Set page configuration
+# Specify local NLTK data path
+nltk.data.path.append(os.path.join(os.path.dirname(__file__), 'nltk_data'))
+
+# Set page config
 st.set_page_config(page_title="AI Mental Health Assistance", page_icon="🧠", layout="wide")
 
-# Simple tokenization function
-def simple_tokenize(text):
-    return re.findall(r'\w+', text.lower())
-
-# Simple lemmatization function (just removes 's' from the end of words)
-def simple_lemmatize(word):
-    return word[:-1] if word.endswith('s') else word
+# Ensure necessary NLTK data is available
+@st.cache_resource(show_spinner=False)
+def download_nltk_data():
+    try:
+        nltk.download('punkt', download_dir=os.path.join(os.path.dirname(__file__), 'nltk_data'), quiet=True)
+        nltk.download('wordnet', download_dir=os.path.join(os.path.dirname(__file__), 'nltk_data'), quiet=True)
+    except Exception as e:
+        st.error(f"Error downloading NLTK data: {e}")
+        st.stop()
 
 # Load or initialize chat history
 def load_chat_history():
-    file_path = 'chat_history.json'
-    if os.path.exists(file_path):
-        try:
-            with open(file_path, 'r') as file:
-                return json.load(file)
-        except json.JSONDecodeError:
-            st.warning("Chat history file is corrupted. Starting with an empty history.")
+    if os.path.exists('chat_history.json'):
+        with open('chat_history.json', 'r') as file:
+            return json.load(file)
     return []
 
 def save_chat_history(messages):
-    file_path = 'chat_history.json'
-    try:
-        with open(file_path, 'w') as file:
-            json.dump(messages, file)
-    except IOError:
-        st.warning("Unable to save chat history.")
+    with open('chat_history.json', 'w') as file:
+        json.dump(messages, file)
+
+# Load or initialize mood data
+def load_mood_data():
+    if os.path.exists('mood_data.json'):
+        with open('mood_data.json', 'r') as file:
+            return json.load(file)
+    return []
+
+def save_mood_data(mood_data):
+    with open('mood_data.json', 'w') as file:
+        json.dump(mood_data, file)
+
+# Download NLTK data
+download_nltk_data()
 
 # Load the intents data
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def load_intents(file_path):
-    try:
-        with open(file_path) as file:
-            return json.load(file)
-    except Exception as e:
-        st.error(f"Error loading intents file: {e}")
-        return {"intents": []}  # Return empty intents instead of stopping the app
+    with open(file_path) as file:
+        return json.load(file)
 
 data = load_intents('intents.json')
+
+lemmatizer = WordNetLemmatizer()
 
 words = []
 classes = []
 documents = []
+ignore_chars = ['?', '!', '.', ',']
 
-# Process intents data
 for intent in data['intents']:
     for pattern in intent['patterns']:
-        word_list = simple_tokenize(pattern)
+        word_list = nltk.word_tokenize(pattern)
         words.extend(word_list)
         documents.append((word_list, intent['tag']))
         if intent['tag'] not in classes:
             classes.append(intent['tag'])
 
-# Lemmatize and clean words
-words = [simple_lemmatize(word) for word in words]
+words = [lemmatizer.lemmatize(word.lower()) for word in words if word not in ignore_chars]
 words = sorted(list(set(words)))
 classes = sorted(list(set(classes)))
 
-# Prepare training data
 training = []
 output_empty = [0] * len(classes)
 
 for document in documents:
     bag = []
     word_patterns = document[0]
-    word_patterns = [simple_lemmatize(word) for word in word_patterns]
-    
-    # Create bag of words
+    word_patterns = [lemmatizer.lemmatize(word.lower()) for word in word_patterns]
     for word in words:
         bag.append(1 if word in word_patterns else 0)
 
@@ -93,7 +99,7 @@ train_x = list(training[:, 0])
 train_y = list(training[:, 1])
 
 # Function to create and train the model
-
+@st.cache_resource(show_spinner=False)
 def create_and_train_model(train_x, train_y):
     model = Sequential()
     model.add(Dense(128, input_shape=(len(train_x[0]),), activation='relu'))
@@ -105,17 +111,15 @@ def create_and_train_model(train_x, train_y):
     sgd = SGD(learning_rate=0.01, momentum=0.9, nesterov=True)
     model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
 
-    # Train the model
     model.fit(np.array(train_x), np.array(train_y), epochs=200, batch_size=5, verbose=0)
     return model
 
-# Create and train the model without a spinner
+# Create and train the model
 model = create_and_train_model(train_x, train_y)
 
-# Utility functions to process input and predict response
 def clean_up_sentence(sentence):
-    sentence_words = simple_tokenize(sentence)
-    sentence_words = [simple_lemmatize(word) for word in sentence_words]
+    sentence_words = nltk.word_tokenize(sentence)
+    sentence_words = [lemmatizer.lemmatize(word.lower()) for word in sentence_words]
     return sentence_words
 
 def bag_of_words(sentence):
@@ -133,7 +137,9 @@ def predict_class(sentence):
     ERROR_THRESHOLD = 0.25
     results = [[i, r] for i, r in enumerate(res) if r > ERROR_THRESHOLD]
     results.sort(key=lambda x: x[1], reverse=True)
-    return_list = [{'intent': classes[r[0]], 'probability': str(r[1])} for r in results]
+    return_list = []
+    for r in results:
+        return_list.append({'intent': classes[r[0]], 'probability': str(r[1])})
     return return_list
 
 def get_response(intents_list, intents_json):
@@ -142,34 +148,18 @@ def get_response(intents_list, intents_json):
         list_of_intents = intents_json['intents']
         for i in list_of_intents:
             if i['tag'] == tag:
-                return random.choice(i['responses'])
-    return "I'm not sure I understand. Can you please rephrase?"
+                result = random.choice(i['responses'])
+                break
+        return result
+    else:
+        return "I'm not sure I understand. Can you please rephrase?"
 
-# Function to load mood data
-def load_mood_data():
-    file_path = 'mood_data.json'
-    if os.path.exists(file_path):
-        try:
-            with open(file_path, 'r') as file:
-                return json.load(file)
-        except json.JSONDecodeError:
-            st.warning("Mood data file is corrupted. Starting with empty data.")
-    return []
 
-# Function to save mood data
-def save_mood_data(mood_data):
-    file_path = 'mood_data.json'
-    try:
-        with open(file_path, 'w') as file:
-            json.dump(mood_data, file)
-    except IOError:
-        st.warning("Unable to save mood data.")
-
-# Chatbot UI elements
-st.title("🧠 AI Mental Health Assistance")
+# Title and introduction
+st.title("🧠 Mental Health Chatbot")
 st.markdown("Welcome to your personal mental health assistant. Feel free to share your thoughts and concerns.")
 
-# Sidebar with options and mood tracking
+# Sidebar for options and mood tracking
 with st.sidebar:
     st.header("Options")
     if st.button("Start a New Chat"):
@@ -197,29 +187,47 @@ with st.sidebar:
         else:
             st.info("No mood data available yet.")
 
-# Chat session state and handling input
+# Initialize session state
 if 'messages' not in st.session_state:
     st.session_state.messages = load_chat_history()
 
+# Display chat messages
 for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
+    with st.chat_message(message["role"], avatar="🧑" if message["role"] == "user" else "🤖"):
         st.markdown(message["content"])
 
+# Chat input
 if prompt := st.chat_input("💬 What's on your mind?"):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
+    with st.chat_message("user", avatar="🧑"):
         st.markdown(prompt)
 
     # Get chatbot response
-    intents = predict_class(prompt)
-    response = get_response(intents, data)
+    with st.chat_message("assistant", avatar="🤖"):
+        message_placeholder = st.empty()
+        message_placeholder.markdown("🤔")
+        
+        ints = predict_class(prompt)
+        response = get_response(ints, data)
 
-    with st.chat_message("assistant"):
-        st.markdown(response)
+        # Simulate typing effect
+        full_response = ""
+        for chunk in response.split():
+            full_response += chunk + " "
+            message_placeholder.markdown(f"{full_response}▌")
+            time.sleep(0.05)
+
+        message_placeholder.markdown(response)
+
     st.session_state.messages.append({"role": "assistant", "content": response})
 
+    # Save chat history
     save_chat_history(st.session_state.messages)
 
-# Footer note
+# Display a helpful message if the chat is empty
+if not st.session_state.messages:
+    st.info("👋 Hello! How are you feeling today? Feel free to share your thoughts or concerns.")
+
+# Footer
 st.markdown("---")
-st.markdown("Remember, this chatbot is here to listen and offer support. For professional help, please consult a licensed mental health professional.")
+st.markdown("Remember, I'm here to listen and offer support, but for professional help, please consult a licensed mental health professional.")

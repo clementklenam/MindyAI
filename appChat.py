@@ -21,6 +21,7 @@ def simple_lemmatize(word):
     return word[:-1] if word.endswith('s') else word
 
 # Load or initialize chat history
+@st.cache_data(show_spinner=False, ttl="7m")
 def load_chat_history():
     file_path = 'chat_history.json'
     if os.path.exists(file_path):
@@ -56,6 +57,7 @@ classes = []
 documents = []
 
 # Process intents data
+@st.cache_data(show_spinner=False, ttl="7m")
 for intent in data['intents']:
     for pattern in intent['patterns']:
         word_list = simple_tokenize(pattern)
@@ -93,7 +95,7 @@ train_x = list(training[:, 0])
 train_y = list(training[:, 1])
 
 # Function to create and train the model
-@st.cache_resource
+@st.cache_resource(show_spinner=False, ttl="7m")
 def create_and_train_model(train_x, train_y):
     model = Sequential()
     model.add(Dense(128, input_shape=(len(train_x[0]),), activation='relu'))

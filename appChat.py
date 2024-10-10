@@ -8,28 +8,6 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.optimizers import SGD
 import asyncio
-import requests
-from streamlit_lottie import st_lottie
-
-# Optimize loading Lottie animation
-@st.cache_data(show_spinner=False)
-def load_lottieurl(url: str):
-    r = requests.get(url)
-    if r.status_code != 200:
-        return None
-    return r.json()
-
-@st.cache_resource(show_spinner=False)
-def get_lottie_animation():
-    lottie_url = "https://lottie.host/c850a9c6-a7b6-49bd-af86-ae5e07564b46/9qJ1pZd7qn.json"
-    return load_lottieurl(lottie_url)
-
-def display_lottie_animation():
-    lottie_json = get_lottie_animation()
-    if lottie_json:
-        st_lottie(lottie_json, speed=1, width=300, height=300, key="loading_animation")
-    else:
-        st.warning("Lottie animation could not be loaded.")
 
 # Tokenization and lemmatization
 @st.cache_data(show_spinner=False)
@@ -190,12 +168,10 @@ async def main():
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Display placeholder message and animation while processing
+        # Display placeholder message while processing
         with st.chat_message("assistant"):
             placeholder = st.empty()
-            with placeholder.container():
-                display_lottie_animation()
-                st.text("Thinking...")
+            placeholder.text("Thinking...")
 
             # Async processing and response
             response = await handle_message_async(prompt, model, words, classes, data)

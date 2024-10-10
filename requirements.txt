@@ -2,5 +2,5 @@ streamlit
 nltk
 tensorflow
 numpy
-lottie
+streamlit_lottie
 

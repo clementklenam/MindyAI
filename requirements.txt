@@ -2,4 +2,5 @@ streamlit
 nltk
 tensorflow
 numpy
+st_lottie
 

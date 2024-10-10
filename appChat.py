@@ -7,21 +7,41 @@ import numpy as np
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.optimizers import SGD
-from datetime import datetime
+import asyncio
+import requests
+from streamlit_lottie import st_lottie
 
-# Set page configuration
-st.set_page_config(page_title="AI Mental Health Assistance", page_icon="🧠", layout="wide")
+# Optimize loading Lottie animation
+@st.cache_data(show_spinner=False)
+def load_lottieurl(url: str):
+    r = requests.get(url)
+    if r.status_code != 200:
+        return None
+    return r.json()
 
-# Simple tokenization function
+@st.cache_resource(show_spinner=False)
+def get_lottie_animation():
+    lottie_url = "https://lottie.host/c850a9c6-a7b6-49bd-af86-ae5e07564b46/9qJ1pZd7qn.json"
+    return load_lottieurl(lottie_url)
+
+def display_lottie_animation():
+    lottie_json = get_lottie_animation()
+    if lottie_json:
+        st_lottie(lottie_json, speed=1, width=300, height=300, key="loading_animation")
+    else:
+        st.warning("Lottie animation could not be loaded.")
+
+# Tokenization and lemmatization
+@st.cache_data(show_spinner=False)
 def simple_tokenize(text):
     return re.findall(r'\w+', text.lower())
 
-# Simple lemmatization function (just removes 's' from the end of words)
+@st.cache_data(show_spinner=False)
 def simple_lemmatize(word):
     return word[:-1] if word.endswith('s') else word
 
 # Load or initialize chat history
-
+@st.cache_data(show_spinner=False)
 def load_chat_history():
     file_path = 'chat_history.json'
     if os.path.exists(file_path):
@@ -32,6 +52,7 @@ def load_chat_history():
             st.warning("Chat history file is corrupted. Starting with an empty history.")
     return []
 
+@st.cache_data(show_spinner=False)
 def save_chat_history(messages):
     file_path = 'chat_history.json'
     try:
@@ -40,62 +61,17 @@ def save_chat_history(messages):
     except IOError:
         st.warning("Unable to save chat history.")
 
-# Load the intents data
-
+# Load intents data
+@st.cache_data(show_spinner=False)
 def load_intents(file_path):
     try:
         with open(file_path) as file:
             return json.load(file)
     except Exception as e:
         st.error(f"Error loading intents file: {e}")
-        return {"intents": []}  # Return empty intents instead of stopping the app
+        return {"intents": []}
 
-data = load_intents('intents.json')
-
-words = []
-classes = []
-documents = []
-
-# Process intents data
-
-for intent in data['intents']:
-    for pattern in intent['patterns']:
-        word_list = simple_tokenize(pattern)
-        words.extend(word_list)
-        documents.append((word_list, intent['tag']))
-        if intent['tag'] not in classes:
-            classes.append(intent['tag'])
-
-# Lemmatize and clean words
-words = [simple_lemmatize(word) for word in words]
-words = sorted(list(set(words)))
-classes = sorted(list(set(classes)))
-
-# Prepare training data
-training = []
-output_empty = [0] * len(classes)
-
-for document in documents:
-    bag = []
-    word_patterns = document[0]
-    word_patterns = [simple_lemmatize(word) for word in word_patterns]
-    
-    # Create bag of words
-    for word in words:
-        bag.append(1 if word in word_patterns else 0)
-
-    output_row = list(output_empty)
-    output_row[classes.index(document[1])] = 1
-    training.append([bag, output_row])
-
-random.shuffle(training)
-training = np.array(training, dtype=object)
-
-train_x = list(training[:, 0])
-train_y = list(training[:, 1])
-
-# Function to create and train the model
-@st.cache_resource(show_spinner=False, ttl="7m")
+@st.cache_resource(show_spinner=False)
 def create_and_train_model(train_x, train_y):
     model = Sequential()
     model.add(Dense(128, input_shape=(len(train_x[0]),), activation='relu'))
@@ -111,16 +87,15 @@ def create_and_train_model(train_x, train_y):
     model.fit(np.array(train_x), np.array(train_y), epochs=200, batch_size=5, verbose=0)
     return model
 
-# Create and train the model
-model = create_and_train_model(train_x, train_y)
-
-# Utility functions to process input and predict response
+# Processing input and predicting response
+@st.cache_data(show_spinner=False)
 def clean_up_sentence(sentence):
     sentence_words = simple_tokenize(sentence)
     sentence_words = [simple_lemmatize(word) for word in sentence_words]
     return sentence_words
 
-def bag_of_words(sentence):
+@st.cache_data(show_spinner=False)
+def bag_of_words(sentence, words):
     sentence_words = clean_up_sentence(sentence)
     bag = [0] * len(words)
     for w in sentence_words:
@@ -129,8 +104,9 @@ def bag_of_words(sentence):
                 bag[i] = 1
     return np.array(bag)
 
-def predict_class(sentence):
-    bow = bag_of_words(sentence)
+@st.cache_data(show_spinner=False)
+def predict_class(sentence, model, words, classes):
+    bow = bag_of_words(sentence, words)
     res = model.predict(np.array([bow]))[0]
     ERROR_THRESHOLD = 0.25
     results = [[i, r] for i, r in enumerate(res) if r > ERROR_THRESHOLD]
@@ -138,99 +114,109 @@ def predict_class(sentence):
     return_list = [{'intent': classes[r[0]], 'probability': str(r[1])} for r in results]
     return return_list
 
+@st.cache_data(show_spinner=False)
 def get_response(intents_list, intents_json):
     if intents_list:
         tag = intents_list[0]['intent']
-        list_of_intents = intents_json['intents']
-        for i in list_of_intents:
+        for i in intents_json['intents']:
             if i['tag'] == tag:
                 return random.choice(i['responses'])
     return "I'm not sure I understand. Can you please rephrase?"
 
-# Function to load mood data
-def load_mood_data():
-    file_path = 'mood_data.json'
-    if os.path.exists(file_path):
-        try:
-            with open(file_path, 'r') as file:
-                return json.load(file)
-        except json.JSONDecodeError:
-            st.warning("Mood data file is corrupted. Starting with empty data.")
-    return []
-
-# Function to save mood data
-def save_mood_data(mood_data):
-    file_path = 'mood_data.json'
-    try:
-        with open(file_path, 'w') as file:
-            json.dump(mood_data, file)
-    except IOError:
-        st.warning("Unable to save mood data.")
-
-# Chatbot UI elements
-st.title("🧠 AI Mental Health Assistance")
-st.markdown("Welcome to your personal mental health assistant. Feel free to share your thoughts and concerns.")
-
-# Sidebar with options and mood tracking
-with st.sidebar:
-    st.header("Options")
-    if st.button("Start a New Chat"):
-        st.session_state.messages = []
-        save_chat_history(st.session_state.messages)
-        st.rerun()
-
-    st.header("Mood Tracker")
-    mood = st.slider("How are you feeling today?", 1, 5, 3)
-    mood_submitted = st.button("Submit Mood")
-
-    if mood_submitted:
-        mood_data = load_mood_data()
-        mood_data.append({"date": datetime.now().isoformat(), "mood": mood})
-        save_mood_data(mood_data)
-        st.success("Mood recorded successfully!")
-
-    if st.button("View Mood History"):
-        mood_data = load_mood_data()
-        if mood_data:
-            dates = [datetime.fromisoformat(entry['date']) for entry in mood_data]
-            moods = [entry['mood'] for entry in mood_data]
-            st.line_chart({"Mood": moods}, use_container_width=True)
-            st.write("Mood history (1: Very Low, 5: Very High)")
-        else:
-            st.info("No mood data available yet.")
-
-# Chat session state and handling input
-if 'messages' not in st.session_state:
-    st.session_state.messages = load_chat_history()
-
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-if prompt := st.chat_input("💬 What's on your mind?"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    # Get chatbot response
-    intents = predict_class(prompt)
+# Async chatbot response handling
+async def handle_message_async(prompt, model, words, classes, data):
+    intents = predict_class(prompt, model, words, classes)
     response = get_response(intents, data)
+    return response
 
-    with st.chat_message("assistant"):
-        st.markdown(response)
-    st.session_state.messages.append({"role": "assistant", "content": response})
+@st.cache_resource(show_spinner=False)
+def initialize_model_and_data():
+    data = load_intents('intents.json')
+    words, classes, documents = [], [], []
+    for intent in data['intents']:
+        for pattern in intent['patterns']:
+            word_list = simple_tokenize(pattern)
+            words.extend(word_list)
+            documents.append((word_list, intent['tag']))
+            if intent['tag'] not in classes:
+                classes.append(intent['tag'])
 
-    save_chat_history(st.session_state.messages)
+    words = sorted(list(set([simple_lemmatize(word) for word in words])))
+    classes = sorted(list(set(classes)))
 
-hide_st_style = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            header {visibility: hidden;}
-            </style>
-            """
-st.markdown(hide_st_style, unsafe_allow_html=True)
+    training = []
+    output_empty = [0] * len(classes)
+    for document in documents:
+        bag = [1 if word in document[0] else 0 for word in words]
+        output_row = list(output_empty)
+        output_row[classes.index(document[1])] = 1
+        training.append([bag, output_row])
 
-# Footer note
-st.markdown("---")
-st.markdown("Remember, this chatbot is here to listen and offer support. For professional help, please consult a licensed mental health professional.")
+    random.shuffle(training)
+    training = np.array(training, dtype=object)
+
+    train_x, train_y = list(training[:, 0]), list(training[:, 1])
+
+    model = create_and_train_model(train_x, train_y)
+    return model, words, classes, data
+
+# Main async function
+async def main():
+    st.set_page_config(page_title="AI Mental Health Assistance", page_icon="🧠", layout="wide")
+
+    model, words, classes, data = initialize_model_and_data()
+
+    st.title("🧠 AI Mental Health Assistance")
+    st.markdown("Welcome to your personal mental health assistant. Feel free to share your thoughts and concerns.")
+
+    # Sidebar options
+    with st.sidebar:
+        st.header("Options")
+        if st.button("Start a New Chat"):
+            st.session_state.messages = []
+            save_chat_history(st.session_state.messages)
+            st.rerun()
+
+    # Handle chat session state and input
+    if 'messages' not in st.session_state:
+        st.session_state.messages = load_chat_history()
+
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    if prompt := st.chat_input("💬 What's on your mind?"):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        # Display placeholder message and animation while processing
+        with st.chat_message("assistant"):
+            placeholder = st.empty()
+            with placeholder.container():
+                display_lottie_animation()
+                st.text("Thinking...")
+
+            # Async processing and response
+            response = await handle_message_async(prompt, model, words, classes, data)
+            placeholder.empty()
+            placeholder.markdown(response)
+            st.session_state.messages.append({"role": "assistant", "content": response})
+
+        save_chat_history(st.session_state.messages)
+
+    # Hide default Streamlit elements
+    hide_st_style = """
+        <style>
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        </style>
+    """
+    st.markdown(hide_st_style, unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.markdown("**Disclaimer**: This chatbot is not a substitute for professional mental health care.")
+
+if __name__ == "__main__":
+    asyncio.run(main())
